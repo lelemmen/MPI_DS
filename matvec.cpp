@@ -2,53 +2,60 @@
 #include <iostream>
 #include <cstdlib>
 
-using namespace std;
 
 int main(int argc, char* argv[])
 {
-        // dimensions of a
-        int rows = 100;
-        int cols = 100;
-        
-	double **a;
-        double *b, *c;
-        
-	int master = 0;                 // rank of master
-        int myid;                       // rank of this process
-        int numprocs;                   // number of processes
-        
-	// allocate memory for a, b and c
-        a = (double**)malloc(rows * sizeof(double*));
-        for (int i = 0; i < rows; i++) {
-        	a[i] = (double*)malloc(cols * sizeof(double));
-		for (int j = 0; j < cols; j++) {
-			a[i][j] = 1.0;
-		}
-        }
-        b = (double*)malloc(cols * sizeof(double));
-        c = (double*)malloc(rows * sizeof(double));
-        
+    // dimensions of a
+    int rows = 100;
+    int cols = 100;
+
+    double **a;
+    double *b, *c;
+
+    int master = 0;                 // rank of master
+    int myid;                       // rank of this process
+    int numprocs;                   // number of processes
+
+    // allocate memory for a, b and c
+    a = (double**)malloc(rows * sizeof(double*));
+    b = (double*)malloc(cols * sizeof(double));
+    c = (double*)malloc(rows * sizeof(double));
+
 	MPI_Init( &argc, &argv );
 	MPI_Comm_rank( MPI_COMM_WORLD, &myid );
 	MPI_Comm_size( MPI_COMM_WORLD, &numprocs );
-	MPI_Status status;
+    std::cout << "Number of processes: " << numprocs << std::endl;
+
 
 	int MPI_END_TAG_CUSTOM = -1;
 
+
 	// Master-slave code
-	if ( myid == master ) {	
+	if ( myid == master ) {
+
+        std::cout << "I'm master" << std::endl;
+
 		// Fill in values for b and broadcast to every slave
-		for (int i = 0; i < cols; i++) {
+        for (int i = 0; i < rows; i++) {
+            a[i] = (double*)malloc(cols * sizeof(double));
+            for (int j = 0; j < cols; j++) {
+                a[i][j] = 1.0;
+		    }
+            MPI_Bcast(a[i], cols, MPI_DOUBLE, master, MPI_COMM_WORLD);
+       }
+
+        for (int i = 0; i < cols; i++) {
 			b[i] = 1.0;
 		}
-		MPI_Bcast(b, cols, MPI_DOUBLE, master, MPI_COMM_WORLD);
-		std::cout << "Broadcast b from master." << std::endl;	
+ 		MPI_Bcast(b, cols, MPI_DOUBLE, master, MPI_COMM_WORLD);
+		std::cout << "Broadcasted from master." << std::endl;
 
 		// Initially, send one row of A to each slave
 		int num_sent = 0;  // number of rows that are sent out to the slaves
 		for (int p = 0; p < numprocs-1; p++) {
 			int process = p+1;
 			int row_number = p;
+            std::cout << "Send out row number: " << row_number << std::endl;
 			MPI_Send(a[row_number], cols, MPI_DOUBLE, process, row_number, MPI_COMM_WORLD);
 			num_sent++;
 		}
@@ -65,6 +72,7 @@ int main(int argc, char* argv[])
 			if (num_sent < rows) {
 				// Send a new row to the process that gave a result
 				int row_number = num_sent+1;
+                std::cout << "Send out row number: " << row_number << std::endl;
 				MPI_Send(a[row_number], cols, MPI_DOUBLE, process, row_number, MPI_COMM_WORLD); 
 			}
 
@@ -82,6 +90,8 @@ int main(int argc, char* argv[])
 
 	// Slave
 	else {
+
+        std::cout << "I'm a slave" << std::endl;
 		double *row;
 		row = (double*)malloc(cols * sizeof(double));
 
@@ -98,6 +108,7 @@ int main(int argc, char* argv[])
 					result += row[i] * b[i];
 				}
 
+                std::cout << "Returning result of row number: " << row_number << std::endl;
 				MPI_Send(&result, 1, MPI_DOUBLE, master, row_number, MPI_COMM_WORLD);
 			} else {
 				break;
